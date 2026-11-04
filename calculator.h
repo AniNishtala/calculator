@@ -22,7 +22,7 @@ public:
         freeMatrices();
     }
 
-    // Each object owns its matrices, so do not copy it.
+    // Each object has its matrices, so DONT copy the object.
     calculator(const calculator&) = delete;
     calculator& operator=(const calculator&) = delete;
 
