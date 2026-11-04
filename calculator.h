@@ -166,7 +166,7 @@ private:
     int c1 = 0;
     int r2 = 0;
     int c2 = 0;
-    int threadCount = 1;
+    int threadCount = 16;
 
     double* firstmat = nullptr;
     double* secondmat = nullptr;
