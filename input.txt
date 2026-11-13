@@ -1,0 +1,1 @@
+sin(pi/3); sin(pi/4); sin(pi/6); cos(pi/3); cos(pi/4); cos(pi/6); cos(pi/9); tan(pi/4); tan(pi/6); sqrt(81); sqrt(144); log(10 + 10*log(10)); log(1000); ln(e); exp(1); abs(-42); (5+3)*2; (97+21)/2; 107-3*2; 2^10; 3^4; 5^3; 10%3; (7+1)^2; sqrt(16)+sqrt(25); sin(pi/6)+cos(pi/3); sin(pi/4)^2+cos(pi/4)^2; log(100)*ln(e); (12*8)/(3+1); 1e3+2.5e2; (9-2)*(6+4); sqrt(3^2+4^2)

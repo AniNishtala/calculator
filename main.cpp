@@ -2,13 +2,15 @@
 
 using namespace std;
 
+void runPlotTest();
+
 int main()
 {
     calculator calc;
 
     try
     {
-        calc.runCLI();
+        calc.runCLI(calculator::PlotDisplay(), runPlotTest);
     }
     catch (const exception& error)
     {

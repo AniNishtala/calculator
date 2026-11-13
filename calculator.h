@@ -13,6 +13,8 @@ using namespace std;
 class calculator
 {
 public:
+    using PlotDisplay = std::function<void(const string&, const vector<double>&, const vector<double>&)>;
+
     calculator()
     {
     }
@@ -26,78 +28,156 @@ public:
     calculator(const calculator&) = delete;
     calculator& operator=(const calculator&) = delete;
 
-    // GUI functions are still placeholders.
-    void createWindow()
+    // Calculate plot points here; draw the graph in plot_test.cpp. Outputs matching x/y values and elapsed computation time in seconds.
+    void generateFunctionPlotCPU(const string& function, double xMin, double xMax, int pointCount, vector<double>& xValues, vector<double>& yValues, double& seconds)
     {
-        // Implementation required.
+        seconds = 0.0;
+        if (&xValues == &yValues)
+        {
+            throw invalid_argument("Use separate vectors for x and y values.");
+        }
+        auto start = chrono::steady_clock::now();
+        vector<string> expressions;
+        prepareFunctionPlot(function, xMin, xMax, pointCount, xValues, expressions);
+        double evaluationSeconds = 0.0;
+        arithmeticSerial(expressions, yValues, evaluationSeconds, true);
+        seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
     }
 
-    void createInputBoxes()
+    void generateFunctionPlotPthreads(const string& function, double xMin, double xMax, int pointCount, int threads, vector<double>& xValues, vector<double>& yValues, double& seconds)
     {
-        // Implementation required.
+        seconds = 0.0;
+        checkThreadCount(threads);
+        if (&xValues == &yValues)
+        {
+            throw invalid_argument("Use separate vectors for x and y values.");
+        }
+        auto start = chrono::steady_clock::now();
+        vector<string> expressions;
+        prepareFunctionPlot(function, xMin, xMax, pointCount, xValues, expressions);
+        double evaluationSeconds = 0.0;
+        arithmeticPthreads(expressions, threads, yValues, evaluationSeconds, true);
+        seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
     }
 
-    void createCPUButton()
+    void generateFunctionPlotOpenMP(const string& function, double xMin, double xMax, int pointCount, int threads, vector<double>& xValues, vector<double>& yValues, double& seconds)
     {
-        // Implementation required.
+        seconds = 0.0;
+        checkThreadCount(threads);
+        if (&xValues == &yValues)
+        {
+            throw invalid_argument("Use separate vectors for x and y values.");
+        }
+        auto start = chrono::steady_clock::now();
+        vector<string> expressions;
+        prepareFunctionPlot(function, xMin, xMax, pointCount, xValues, expressions);
+        double evaluationSeconds = 0.0;
+        arithmeticOpenMP(expressions, threads, yValues, evaluationSeconds, true);
+        seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
     }
 
-    void createPthreadsButton()
+    // Evaluate the formula itself, rather than interpolating data points.
+    void evaluateFunctionAtX(const string& function, double x, double& result)
     {
-        // Implementation required.
+        if (!isfinite(x))
+        {
+            throw invalid_argument("Enter a finite x value.");
+        }
+        ostringstream value;
+        value << "(" << setprecision(17) << x << ")";
+        string text = regex_replace(function, regex("\\bx\\b"), value.str());
+        calculateExpression(text, result);
     }
 
-    void createOpenMPButton()
+    // Check the entire grammar even if a trial value is outside the specified domain range
+    void validateFunction(const string& function)
     {
-        // Implementation required.
+        expression = regex_replace(function, regex("\\bx\\b"), "(0)");
+        position = 0;
+        syntaxOnly = true;
+        try
+        {
+            parseExpression();
+            skipSpaces();
+            if (position != expression.size())
+            {
+                throw invalid_argument("Unexpected text in function. Use explicit multiplication such as 2*x.");
+            }
+        }
+        catch (...)
+        {
+            syntaxOnly = false;
+            throw;
+        }
+        syntaxOnly = false;
     }
 
-    void createCUDAButton()
+    // Return the signed integral and nonnegative area.
+    void integrateFunction(const string& function, double lower, double upper, int intervals, int method, int threads, double& signedIntegral, double& geometricArea, double& seconds)
     {
-        // Implementation required.
+        seconds = 0.0;
+        if (!isfinite(lower) || !isfinite(upper) || intervals < 2 || intervals % 2 != 0 || intervals >= numeric_limits<int>::max())
+        {
+            throw invalid_argument("Use finite bounds and a positive even interval count of at least 2.");
+        }
+        if (method < 1 || method > 3)
+        {
+            throw invalid_argument("Integration method must be 1, 2, or 3.");
+        }
+        checkThreadCount(threads);
+        auto start = chrono::steady_clock::now();
+        validateFunction(function);
+        if (lower == upper)
+        {
+            signedIntegral = 0.0;
+            geometricArea = 0.0;
+            seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
+            return;
+        }
+        double minimum = min(lower, upper);
+        double maximum = max(lower, upper);
+        vector<double> xValues;
+        vector<double> yValues;
+        double samplingSeconds = 0.0;
+        if (method == 1)
+        {
+            generateFunctionPlotCPU(function, minimum, maximum, intervals + 1, xValues, yValues, samplingSeconds);
+        }
+        else if (method == 2)
+        {
+            generateFunctionPlotPthreads(function, minimum, maximum, intervals + 1, threads, xValues, yValues, samplingSeconds);
+        }
+        else
+        {
+            generateFunctionPlotOpenMP(function, minimum, maximum, intervals + 1, threads, xValues, yValues, samplingSeconds);
+        }
+        long double sum = 0.0L;
+        long double absoluteSum = 0.0L;
+        for (int i = 0; i <= intervals; i++)
+        {
+            if (!isfinite(yValues[i]))
+            {
+                throw invalid_argument("Function is undefined at an integration sample. Choose valid bounds.");
+            }
+            int weight = (i == 0 || i == intervals) ? 1 : (i % 2 == 0 ? 2 : 4);
+            sum += weight * static_cast<long double>(yValues[i]);
+            absoluteSum += weight * fabs(static_cast<long double>(yValues[i]));
+        }
+        long double step = (static_cast<long double>(maximum) - minimum) / intervals;
+        double signedResult = static_cast<double>(sum * step / 3.0L);
+        double areaResult = static_cast<double>(absoluteSum * step / 3.0L);
+        if (!isfinite(signedResult) || !isfinite(areaResult))
+        {
+            throw overflow_error("Integration result is outside the finite numeric range.");
+        }
+        signedIntegral = lower < upper ? signedResult : -signedResult;
+        geometricArea = areaResult;
+        seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
     }
 
-    void createClearButton()
-    {
-        // Implementation required.
-    }
-
-    void createResultBox()
-    {
-        // Implementation required.
-    }
-
-    void runGUI()
-    {
-        // Implementation required.
-    }
-
-    void closeGUI()
-    {
-        // Implementation required.
-    }
-
-    void cpuButtonClicked()
-    {
-        // Implementation required.
-    }
-
-    void pthreadsButtonClicked()
-    {
-        // Implementation required.
-    }
-
-    void openmpButtonClicked()
-    {
-        // Implementation required.
-    }
-
-    void cudaButtonClicked()
-    {
-        // Implementation required.
-    }
-
-    void clearButtonClicked()
+    // Intended outputs: labels, median seconds, and speedups relative to CPU.
+    // Samples should measure the same work with each execution method.
+    void generatePerformancePlotData(const vector<double>& cpuSamples, const vector<double>& pthreadSamples, const vector<double>& openmpSamples, vector<string>& methodNames, vector<double>& medianSeconds, vector<double>& speedups)
     {
         // Implementation required.
     }
@@ -445,6 +525,7 @@ public:
     // Scalar expressions run on the CPU; starting threads would add overhead.
     void calculateExpression(const string& text, double& result)
     {
+        syntaxOnly = false;
         expression = text;
         position = 0;
         result = parseExpression();
@@ -494,15 +575,25 @@ public:
     }
 
     // Evaluate independent expressions one after another.
-    void arithmeticSerial(const vector<string>& inputs,
-        vector<double>& results, double& seconds)
+    void arithmeticSerial(const vector<string>& inputs, vector<double>& results, double& seconds, bool allowUndefined = false)
     {
         auto start = chrono::steady_clock::now();
         results.assign(inputs.size(), 0.0);
 
         for (size_t i = 0; i < inputs.size(); i++)
         {
-            calculateExpression(inputs[i], results[i]);
+            try
+            {
+                calculateExpression(inputs[i], results[i]);
+            }
+            catch (const invalid_argument&)
+            {
+                if (!allowUndefined)
+                {
+                    throw;
+                }
+                results[i] = numeric_limits<double>::quiet_NaN();
+            }
         }
 
         seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
@@ -510,8 +601,7 @@ public:
 
     // Reuse a fixed team for successive batches with the same worker count.
     // Submit one batch at a time per calculator object.
-    void arithmeticPthreads(const vector<string>& inputs, int threads,
-        vector<double>& results, double& seconds)
+    void arithmeticPthreads(const vector<string>& inputs, int threads, vector<double>& results, double& seconds, bool allowUndefined = false)
     {
         checkThreadCount(threads);
         auto start = chrono::steady_clock::now();
@@ -546,11 +636,10 @@ public:
         pthread_mutex_unlock(&pool->mutex);
 
         seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
-        checkArithmeticErrors(pool->errors);
+        checkArithmeticErrors(pool->errors, allowUndefined ? &results : nullptr);
     }
 
-    void arithmeticOpenMP(const vector<string>& inputs, int threads,
-        vector<double>& results, double& seconds)
+    void arithmeticOpenMP(const vector<string>& inputs, int threads, vector<double>& results, double& seconds, bool allowUndefined = false)
     {
         checkThreadCount(threads);
         auto start = chrono::steady_clock::now();
@@ -586,7 +675,7 @@ public:
         }
 
         seconds = chrono::duration<double>(chrono::steady_clock::now() - start).count();
-        checkArithmeticErrors(openmpArithmeticErrors);
+        checkArithmeticErrors(openmpArithmeticErrors, allowUndefined ? &results : nullptr);
     }
 
     void showResult(int rows, int cols, const double* matrix, double seconds)
@@ -640,7 +729,7 @@ public:
         }
     }
 
-    void runCLI()
+    void runCLI(const PlotDisplay& showPlot = PlotDisplay(), const std::function<void()>& showMultiplePlots = std::function<void()>())
     {
         srand(1);
 
@@ -651,6 +740,7 @@ public:
                  << "3. Matrix addition\n"
                  << "4. Matrix dot product (sum of matching element products)\n"
                  << "5. One-line batch arithmetic (separate expressions with ;)\n"
+                 << "6. Plot up to 16 functions (y0-y15, X11 window)\n"
                  << "0. Exit\nChoice: ";
 
             if (!(cin >> operation))
@@ -686,14 +776,125 @@ public:
             {
                 runArithmeticCLI();
             }
+            else if (operation == 6)
+            {
+                try
+                {
+                    if (showMultiplePlots)
+                    {
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        showMultiplePlots();
+                    }
+                    else
+                    {
+                        runPlotCLI(showPlot);
+                    }
+                }
+                catch (const exception& error)
+                {
+                    showError(error.what());
+                    if (cin.eof())
+                    {
+                        return;
+                    }
+                    if (cin.fail())
+                    {
+                        cin.clear();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    }
+                }
+            }
             else
             {
-                throw invalid_argument("Choose a menu number from 0 to 5.");
+                throw invalid_argument("Choose a menu number from 0 to 6.");
             }
         }
     }
 
 private:
+    void prepareFunctionPlot(const string& function, double xMin, double xMax, int pointCount, vector<double>& xValues, vector<string>& expressions)
+    {
+        if (!isfinite(xMin) || !isfinite(xMax) || xMin >= xMax || pointCount < 2)
+        {
+            throw invalid_argument("Use a finite increasing range and at least two points.");
+        }
+        validateFunction(function);
+        xValues.resize(pointCount);
+        expressions.resize(pointCount);
+        regex variable("\\bx\\b");
+
+        for (int i = 0; i < pointCount; i++)
+        {
+            double fraction = static_cast<double>(i) / (pointCount - 1);
+            xValues[i] = (1.0 - fraction) * xMin + fraction * xMax;
+            ostringstream value;
+            value << "(" << setprecision(17) << xValues[i] << ")";
+            expressions[i] = regex_replace(function, variable, value.str());
+        }
+    }
+
+    void runPlotCLI(const PlotDisplay& showPlot)
+    {
+        if (!showPlot)
+        {
+            throw runtime_error("Plot display is not connected. Start the program through CalculatorGUI::run().");
+        }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Function in x, for example sin(x) + x^2: ";
+        string function;
+        if (!getline(cin, function))
+        {
+            throw invalid_argument("Enter a function.");
+        }
+        double xMin = 0.0;
+        double xMax = 0.0;
+        int points = 0;
+        int method = 0;
+        cout << "Enter x minimum and maximum: ";
+        if (!(cin >> xMin >> xMax))
+        {
+            throw invalid_argument("Enter numeric range limits.");
+        }
+        cout << "Number of points (at least 2): ";
+        if (!(cin >> points))
+        {
+            throw invalid_argument("Enter a whole-number point count.");
+        }
+        cout << "Method: 1 = CPU, 2 = Pthreads, 3 = OpenMP: ";
+        if (!(cin >> method) || method < 1 || method > 3)
+        {
+            throw invalid_argument("Choose method 1, 2, or 3.");
+        }
+        int threads = 1;
+        if (method != 1)
+        {
+            cout << "CPU threads (1-32): ";
+            if (!(cin >> threads))
+            {
+                throw invalid_argument("Enter a whole-number thread count.");
+            }
+        }
+        vector<double> xValues;
+        vector<double> yValues;
+        double seconds = 0.0;
+        if (method == 1)
+        {
+            generateFunctionPlotCPU(function, xMin, xMax, points, xValues, yValues, seconds);
+        }
+        else if (method == 2)
+        {
+            generateFunctionPlotPthreads(function, xMin, xMax, points, threads, xValues, yValues, seconds);
+        }
+        else
+        {
+            generateFunctionPlotOpenMP(function, xMin, xMax, points, threads, xValues, yValues, seconds);
+        }
+        cout << fixed << setprecision(9) << "Plot computation time: " << seconds << " seconds\n";
+        cout << "Click the plot and press Esc to return to the calculator.\n";
+        showPlot(function, xValues, yValues);
+        cout << "Plot closed. Returning to calculator.\n";
+    }
+
     struct ArithmeticPool;
 
     struct ArithmeticWorkerData
@@ -857,20 +1058,30 @@ private:
         return nullptr;
     }
 
-    void checkArithmeticErrors(const vector<exception_ptr>& errors)
+    void checkArithmeticErrors(const vector<exception_ptr>& errors, vector<double>* gapValues = nullptr)
     {
         // Run after all workers have finished; report the first failed expression.
         for (size_t i = 0; i < errors.size(); i++)
         {
             if (errors[i])
             {
-                rethrow_exception(errors[i]);
+                try
+                {
+                    rethrow_exception(errors[i]);
+                }
+                catch (const invalid_argument&)
+                {
+                    if (!gapValues)
+                    {
+                        throw;
+                    }
+                    (*gapValues)[i] = numeric_limits<double>::quiet_NaN();
+                }
             }
         }
     }
 
-    bool sameArithmeticResults(const vector<double>& expected,
-        const vector<double>& actual)
+    bool sameArithmeticResults(const vector<double>& expected, const vector<double>& actual)
     {
         if (expected.size() != actual.size())
         {
@@ -1205,7 +1416,7 @@ private:
             else if (take('/'))
             {
                 double divisor = parseUnary();
-                if (divisor == 0.0)
+                if (divisor == 0.0 && !syntaxOnly)
                 {
                     throw invalid_argument("Cannot divide by zero.");
                 }
@@ -1214,7 +1425,7 @@ private:
             else if (take('%'))
             {
                 double divisor = parseUnary();
-                if (divisor == 0.0)
+                if (divisor == 0.0 && !syntaxOnly)
                 {
                     throw invalid_argument("Cannot take a remainder with zero.");
                 }
@@ -1243,7 +1454,7 @@ private:
     double parsePower()
     {
         double value = parsePrimary();
-        if (!isfinite(value))
+        if (!isfinite(value) && !syntaxOnly)
         {
             throw invalid_argument("Invalid function input or numeric overflow.");
         }
@@ -1251,7 +1462,7 @@ private:
         {
             value = pow(value, parseUnary());
         }
-        if (!isfinite(value))
+        if (!isfinite(value) && !syntaxOnly)
         {
             throw invalid_argument("Invalid function input or numeric overflow.");
         }
@@ -1363,6 +1574,7 @@ private:
 
     string expression;
     size_t position = 0;
+    bool syntaxOnly = false;
     ArithmeticPool* arithmeticPool = nullptr;
     vector<exception_ptr> openmpArithmeticErrors;
 };

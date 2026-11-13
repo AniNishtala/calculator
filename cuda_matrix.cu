@@ -3,8 +3,7 @@
 #include <chrono>
 
 // Your original naive matrix multiplication kernel.
-__global__ void matmultiplication(int r1, int c1, int c2,
-    double* firstmat, double* secondmat, double* resultmat)
+__global__ void matmultiplication(int r1, int c1, int c2, double* firstmat, double* secondmat, double* resultmat)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -23,8 +22,7 @@ __global__ void matmultiplication(int r1, int c1, int c2,
     resultmat[x * c2 + y] = sum;
 }
 
-__global__ void mataddition(int rows, int cols,
-    double* firstmat, double* secondmat, double* resultmat)
+__global__ void mataddition(int rows, int cols, double* firstmat, double* secondmat, double* resultmat)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -39,8 +37,7 @@ __global__ void mataddition(int rows, int cols,
 }
 
 // Each GPU thread writes one row's partial dot product.
-__global__ void matdotproduct(int rows, int cols,
-    double* firstmat, double* secondmat, double* partial)
+__global__ void matdotproduct(int rows, int cols, double* firstmat, double* secondmat, double* partial)
 {
     int row = blockIdx.x * blockDim.x + threadIdx.x;
     if (row >= rows)
@@ -70,9 +67,7 @@ __global__ void finishDotProduct(int rows, double* partial, double* result)
 
 // Common allocation/copy/launch code. CUDA error handling can be added later.
 // operation: 2 = multiplication, 3 = addition, 4 = dot product.
-static void runMatricesCUDA(int operation, int r1, int c1, int c2,
-    const double* firstmat, const double* secondmat,
-    double* resultmat, double& seconds)
+static void runMatricesCUDA(int operation, int r1, int c1, int c2, const double* firstmat, const double* secondmat, double* resultmat, double& seconds)
 {
     size_t firstBytes = static_cast<size_t>(r1) * c1 * sizeof(double);
     size_t secondBytes = operation == 2
@@ -129,23 +124,17 @@ static void runMatricesCUDA(int operation, int r1, int c1, int c2,
     seconds = std::chrono::duration<double>(end - start).count();
 }
 
-void multiplyMatricesCUDA(int r1, int c1, int c2,
-    const double* firstmat, const double* secondmat,
-    double* resultmat, double& seconds)
+void multiplyMatricesCUDA(int r1, int c1, int c2, const double* firstmat, const double* secondmat, double* resultmat, double& seconds)
 {
     runMatricesCUDA(2, r1, c1, c2, firstmat, secondmat, resultmat, seconds);
 }
 
-void addMatricesCUDA(int rows, int cols,
-    const double* firstmat, const double* secondmat,
-    double* resultmat, double& seconds)
+void addMatricesCUDA(int rows, int cols, const double* firstmat, const double* secondmat, double* resultmat, double& seconds)
 {
     runMatricesCUDA(3, rows, cols, cols, firstmat, secondmat, resultmat, seconds);
 }
 
-void dotMatricesCUDA(int rows, int cols,
-    const double* firstmat, const double* secondmat,
-    double& result, double& seconds)
+void dotMatricesCUDA(int rows, int cols, const double* firstmat, const double* secondmat, double& result, double& seconds)
 {
     runMatricesCUDA(4, rows, cols, cols, firstmat, secondmat, &result, seconds);
 }
