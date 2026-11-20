@@ -41,7 +41,7 @@ cuda_matrix.o: cuda_matrix.cu cuda_matrix.h
 plot_test: plot_test_standalone.o
 	$(CXX) $(CXXFLAGS) plot_test_standalone.o -lX11 -o $@
 
-# Change this macro if your source uses a different standalone guard.
+
 plot_test_standalone.o: plot_test.cpp calculator.h cuda_matrix.h
 	$(CXX) $(CXXFLAGS) -DPLOT_TEST_STANDALONE -c plot_test.cpp -o $@
 
