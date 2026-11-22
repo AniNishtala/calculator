@@ -188,6 +188,110 @@ void CalculatorGUI::handleMenuClick(
     {
         running = false;
     }
+    else
+    {
+        currentScreen = buttonIndex + 1;
+
+        XClearWindow(display, window);
+        drawOperationScreen();
+        XFlush(display);
+    }
+}
+
+void CalculatorGUI::drawOperationScreen()
+{
+    const char* screenTitles[] =
+    {
+        "",
+        "Arithmetic Expression",
+        "Matrix Multiplication",
+        "Matrix Addition",
+        "Matrix Dot Product",
+        "Batch Arithmetic",
+        "Function Plotter"
+    };
+
+    if (currentScreen < 1 ||
+        currentScreen > 6)
+    {
+        return;
+    }
+
+    const char* title =
+        screenTitles[currentScreen];
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        50,
+        title,
+        static_cast<int>(std::strlen(title)));
+
+    const char* message =
+        "Input controls will be added next.";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        100,
+        message,
+        static_cast<int>(std::strlen(message)));
+
+    const int backButtonX = 30;
+    const int backButtonY = 620;
+    const int backButtonWidth = 180;
+    const int backButtonHeight = 45;
+
+    XDrawRectangle(
+        display,
+        window,
+        graphicsContext,
+        backButtonX,
+        backButtonY,
+        backButtonWidth,
+        backButtonHeight);
+
+    const char* backLabel =
+        "Back to Main Menu";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        backButtonX + 20,
+        backButtonY + 28,
+        backLabel,
+        static_cast<int>(std::strlen(backLabel)));
+}
+
+
+void CalculatorGUI::handleOperationClick(
+    int mouseX,
+    int mouseY)
+{
+    const int backButtonX = 30;
+    const int backButtonY = 620;
+    const int backButtonWidth = 180;
+    const int backButtonHeight = 45;
+
+    bool insideBackButton =
+        mouseX >= backButtonX &&
+        mouseX <= backButtonX + backButtonWidth &&
+        mouseY >= backButtonY &&
+        mouseY <= backButtonY + backButtonHeight;
+
+    if (insideBackButton)
+    {
+        currentScreen = 0;
+
+        XClearWindow(display, window);
+        drawMenu();
+        XFlush(display);
+    }
 }
 
 void CalculatorGUI::run()
@@ -204,19 +308,35 @@ void CalculatorGUI::run()
             event.xexpose.count == 0)
         {
             XClearWindow(display, window);
-            drawMenu();
+
+            if (currentScreen == 0)
+            {
+                drawMenu();
+            }
+            else
+            {
+                drawOperationScreen();
+            }
         }
         else if (event.type == ButtonPress)
         {
             if (event.xbutton.button == Button1)
             {
-                handleMenuClick(
-                    event.xbutton.x,
-                    event.xbutton.y);
+                if (currentScreen == 0)
+                {
+                    handleMenuClick(
+                        event.xbutton.x,
+                        event.xbutton.y);
+                }
+                else
+                {
+                    handleOperationClick(
+                        event.xbutton.x,
+                        event.xbutton.y);
+                }
             }
         }
         else if (event.type == ConfigureNotify)
-
         {
             windowWidth = event.xconfigure.width;
             windowHeight = event.xconfigure.height;
@@ -228,7 +348,18 @@ void CalculatorGUI::run()
 
             if (key == XK_Escape)
             {
-                running = false;
+                if (currentScreen == 0)
+                {
+                    running = false;
+                }
+                else
+                {
+                    currentScreen = 0;
+
+                    XClearWindow(display, window);
+                    drawMenu();
+                    XFlush(display);
+                }
             }
         }
         else if (
