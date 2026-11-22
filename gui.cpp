@@ -52,6 +52,7 @@ void CalculatorGUI::createWindow()
         window,
         ExposureMask |
         KeyPressMask |
+        ButtonPressMask |
         StructureNotifyMask);
 
     deleteWindowMessage =
@@ -83,6 +84,66 @@ void CalculatorGUI::createWindow()
 }
 
 
+// Draw Menu
+void CalculatorGUI::drawMenu()
+{
+    const char* title = "Operating Systems Calculator";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        50,
+        title,
+        static_cast<int>(std::strlen(title)));
+
+    const char* buttonLabels[] =
+    {
+        "1. Arithmetic Expression",
+        "2. Matrix Multiplication",
+        "3. Matrix Addition",
+        "4. Matrix Dot Product",
+        "5. Batch Arithmetic",
+        "6. Function Plotter",
+        "0. Exit"
+    };
+
+    const int buttonCount = 7;
+    const int buttonX = 80;
+    const int firstButtonY = 100;
+    const int buttonWidth = 500;
+    const int buttonHeight = 55;
+    const int buttonSpacing = 15;
+
+    for (int i = 0; i < buttonCount; i++)
+    {
+        int buttonY =
+            firstButtonY +
+            i * (buttonHeight + buttonSpacing);
+
+        XDrawRectangle(
+            display,
+            window,
+            graphicsContext,
+            buttonX,
+            buttonY,
+            buttonWidth,
+            buttonHeight);
+
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            buttonX + 20,
+            buttonY + 34,
+            buttonLabels[i],
+            static_cast<int>(
+                std::strlen(buttonLabels[i])));
+    }
+}
+
+
 void CalculatorGUI::run()
 {
     createWindow();
@@ -97,18 +158,7 @@ void CalculatorGUI::run()
             event.xexpose.count == 0)
         {
             XClearWindow(display, window);
-
-            const char* title =
-                "Operating Systems Calculator";
-
-            XDrawString(
-                display,
-                window,
-                graphicsContext,
-                30,
-                50,
-                title,
-                static_cast<int>(std::strlen(title)));
+            drawMenu();
         }
         else if (event.type == ConfigureNotify)
         {

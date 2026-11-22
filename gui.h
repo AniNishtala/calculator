@@ -48,6 +48,8 @@ public:
 
 private:
     calculator calc;
+    
+    void drawMenu();
 
     Display* display = nullptr;                // Connection to the X11 display server
     Window window = 0;                         // Identifier for the calculator window
