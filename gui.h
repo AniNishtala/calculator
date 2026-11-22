@@ -50,6 +50,7 @@ private:
     calculator calc;
     
     void drawMenu();
+    void handleMenuClick(int mouseX, int mouseY);
 
     Display* display = nullptr;                // Connection to the X11 display server
     Window window = 0;                         // Identifier for the calculator window
