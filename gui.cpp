@@ -144,6 +144,52 @@ void CalculatorGUI::drawMenu()
 }
 
 
+void CalculatorGUI::handleMenuClick(
+    int mouseX,
+    int mouseY)
+{
+    const int buttonX = 80;
+    const int firstButtonY = 100;
+    const int buttonWidth = 500;
+    const int buttonHeight = 55;
+    const int buttonSpacing = 15;
+    const int buttonCount = 7;
+
+    if (mouseX < buttonX ||
+        mouseX > buttonX + buttonWidth)
+    {
+        return;
+    }
+
+    int relativeY = mouseY - firstButtonY;
+
+    if (relativeY < 0)
+    {
+        return;
+    }
+
+    int buttonAreaHeight =
+        buttonHeight + buttonSpacing;
+
+    int buttonIndex =
+        relativeY / buttonAreaHeight;
+
+    int positionInsideButton =
+        relativeY % buttonAreaHeight;
+
+    if (buttonIndex < 0 ||
+        buttonIndex >= buttonCount ||
+        positionInsideButton > buttonHeight)
+    {
+        return;
+    }
+
+    if (buttonIndex == 6)
+    {
+        running = false;
+    }
+}
+
 void CalculatorGUI::run()
 {
     createWindow();
@@ -160,7 +206,17 @@ void CalculatorGUI::run()
             XClearWindow(display, window);
             drawMenu();
         }
+        else if (event.type == ButtonPress)
+        {
+            if (event.xbutton.button == Button1)
+            {
+                handleMenuClick(
+                    event.xbutton.x,
+                    event.xbutton.y);
+            }
+        }
         else if (event.type == ConfigureNotify)
+
         {
             windowWidth = event.xconfigure.width;
             windowHeight = event.xconfigure.height;
