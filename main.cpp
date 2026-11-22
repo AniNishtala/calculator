@@ -1,20 +1,34 @@
 #include "calculator.h"
+#include "gui.h"
 
 using namespace std;
 
 void runPlotTest();
 
-int main()
+int main(int argc, char* argv[])
 {
-    calculator calc;
-
     try
     {
-        calc.runCLI(calculator::PlotDisplay(), runPlotTest);
+        if (argc > 1 &&
+            string(argv[1]) == "--gui")
+        {
+            CalculatorGUI gui;
+            gui.run();
+        }
+        else
+        {
+            calculator calc;
+            calc.runCLI(
+                calculator::PlotDisplay(),
+                runPlotTest);
+        }
     }
     catch (const exception& error)
     {
-        calc.showError(error.what());
+        cerr << "Error: "
+             << error.what()
+             << '\n';
+
         return 1;
     }
 
