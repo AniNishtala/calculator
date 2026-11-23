@@ -522,6 +522,96 @@ public:
         computeCUDA(seconds);
     }
 
+    // Public matrix interface used by the GUI
+    void configureMatrixData(
+        int operationValue,
+        int rows1,
+        int cols1,
+        int rows2,
+        int cols2,
+        int threads,
+        const vector<double>& firstValues,
+        const vector<double>& secondValues)
+    {
+        operation = operationValue;
+        r1 = rows1;
+        c1 = cols1;
+        r2 = rows2;
+        c2 = cols2;
+        threadCount = threads;
+
+        allocateMatrices();
+
+        size_t firstCount =
+            static_cast<size_t>(r1) * c1;
+
+        size_t secondCount =
+            static_cast<size_t>(r2) * c2;
+
+        if (firstValues.size() != firstCount ||
+            secondValues.size() != secondCount)
+        {
+            freeMatrices();
+
+            throw invalid_argument(
+                "The number of matrix values does not match the matrix dimensions.");
+        }
+
+        for (size_t i = 0; i < firstCount; i++)
+        {
+            if (!isfinite(firstValues[i]))
+            {
+                freeMatrices();
+
+                throw invalid_argument(
+                    "Matrix A contains a non-finite value.");
+            }
+
+            firstmat[i] = firstValues[i];
+        }
+
+        for (size_t i = 0; i < secondCount; i++)
+        {
+            if (!isfinite(secondValues[i]))
+            {
+                freeMatrices();
+
+                throw invalid_argument(
+                    "Matrix B contains a non-finite value.");
+            }
+
+            secondmat[i] = secondValues[i];
+        }
+    }
+
+
+    vector<double> getMatrixResult() const
+    {
+        if (resultmat == nullptr)
+        {
+            throw runtime_error(
+                "No matrix result is available.");
+        }
+
+        return vector<double>(
+            resultmat,
+            resultmat +
+                static_cast<size_t>(resultRows) *
+                resultCols);
+    }
+
+
+    int getMatrixResultRows() const
+    {
+        return resultRows;
+    }
+
+
+    int getMatrixResultColumns() const
+    {
+        return resultCols;
+    }
+
     // Scalar expressions run on the CPU; starting threads would add overhead.
     void calculateExpression(const string& text, double& result)
     {

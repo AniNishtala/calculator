@@ -403,6 +403,431 @@ void CalculatorGUI::handleArithmeticKey(
     XFlush(display);
 }
 
+void CalculatorGUI::drawMatrixControls()
+{
+    auto drawInputField =
+        [&](int fieldNumber,
+            const char* label,
+            int x,
+            int y,
+            int width,
+            const std::string& value)
+        {
+            std::string displayedLabel;
+
+            if (activeMatrixField == fieldNumber)
+            {
+                displayedLabel = "> ";
+            }
+
+            displayedLabel += label;
+
+            XDrawString(
+                display,
+                window,
+                graphicsContext,
+                x,
+                y,
+                displayedLabel.c_str(),
+                static_cast<int>(
+                    displayedLabel.size()));
+
+            XDrawRectangle(
+                display,
+                window,
+                graphicsContext,
+                x,
+                y + 10,
+                width,
+                35);
+
+            XDrawString(
+                display,
+                window,
+                graphicsContext,
+                x + 10,
+                y + 33,
+                value.c_str(),
+                static_cast<int>(value.size()));
+        };
+
+    drawInputField(
+        1,
+        "Dimensions: rowsA colsA rowsB colsB",
+        30,
+        90,
+        300,
+        matrixDimensionsInput);
+
+    drawInputField(
+        2,
+        "Thread count",
+        360,
+        90,
+        120,
+        matrixThreadsInput);
+
+    drawInputField(
+        3,
+        "Matrix A values (row by row)",
+        30,
+        160,
+        800,
+        matrixAInput);
+
+    drawInputField(
+        4,
+        "Matrix B values (row by row)",
+        30,
+        230,
+        800,
+        matrixBInput);
+
+    auto drawButton =
+        [&](int x,
+            int width,
+            const char* label)
+        {
+            const int buttonY = 310;
+            const int buttonHeight = 40;
+
+            XDrawRectangle(
+                display,
+                window,
+                graphicsContext,
+                x,
+                buttonY,
+                width,
+                buttonHeight);
+
+            XDrawString(
+                display,
+                window,
+                graphicsContext,
+                x + 15,
+                buttonY + 25,
+                label,
+                static_cast<int>(
+                    std::strlen(label)));
+        };
+
+    drawButton(30, 90, "CPU");
+    drawButton(135, 120, "Pthreads");
+    drawButton(270, 120, "OpenMP");
+    drawButton(405, 90, "CUDA");
+    drawButton(510, 90, "Clear");
+
+    if (!matrixStatus.empty())
+    {
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            390,
+            matrixStatus.c_str(),
+            static_cast<int>(matrixStatus.size()));
+    }
+
+    if (!matrixOutput.empty())
+    {
+        const char* resultLabel = "Result:";
+
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            425,
+            resultLabel,
+            static_cast<int>(
+                std::strlen(resultLabel)));
+
+        int rowsToDisplay =
+            std::min(matrixOutputRows, 6);
+
+        int columnsToDisplay =
+            std::min(matrixOutputColumns, 6);
+
+        for (int row = 0;
+             row < rowsToDisplay;
+             row++)
+        {
+            std::ostringstream outputRow;
+            outputRow << "[ ";
+
+            for (int column = 0;
+                 column < columnsToDisplay;
+                 column++)
+            {
+                outputRow
+                    << std::setprecision(8)
+                    << matrixOutput[
+                        static_cast<size_t>(row) *
+                        matrixOutputColumns +
+                        column]
+                    << " ";
+            }
+
+            if (matrixOutputColumns > columnsToDisplay)
+            {
+                outputRow << "... ";
+            }
+
+            outputRow << "]";
+
+            std::string rowText =
+                outputRow.str();
+
+            XDrawString(
+                display,
+                window,
+                graphicsContext,
+                30,
+                450 + row * 22,
+                rowText.c_str(),
+                static_cast<int>(rowText.size()));
+        }
+
+        if (matrixOutputRows > rowsToDisplay)
+        {
+            const char* moreRows = "...";
+
+            XDrawString(
+                display,
+                window,
+                graphicsContext,
+                30,
+                450 + rowsToDisplay * 22,
+                moreRows,
+                3);
+        }
+    }
+}
+
+void CalculatorGUI::handleMatrixKey(
+    XKeyEvent& keyEvent)
+{
+    char textBuffer[32];
+    KeySym keySymbol;
+
+    int characterCount =
+        XLookupString(
+            &keyEvent,
+            textBuffer,
+            sizeof(textBuffer),
+            &keySymbol,
+            nullptr);
+
+    if (keySymbol == XK_Tab)
+    {
+        activeMatrixField =
+            activeMatrixField % 4 + 1;
+    }
+    else
+    {
+        std::string* activeInput = nullptr;
+
+        if (activeMatrixField == 1)
+        {
+            activeInput = &matrixDimensionsInput;
+        }
+        else if (activeMatrixField == 2)
+        {
+            activeInput = &matrixThreadsInput;
+        }
+        else if (activeMatrixField == 3)
+        {
+            activeInput = &matrixAInput;
+        }
+        else if (activeMatrixField == 4)
+        {
+            activeInput = &matrixBInput;
+        }
+
+        if (activeInput != nullptr)
+        {
+            if (keySymbol == XK_BackSpace)
+            {
+                if (!activeInput->empty())
+                {
+                    activeInput->pop_back();
+                }
+            }
+            else
+            {
+                for (int i = 0;
+                     i < characterCount;
+                     i++)
+                {
+                    unsigned char character =
+                        static_cast<unsigned char>(
+                            textBuffer[i]);
+
+                    if (std::isprint(character) &&
+                        activeInput->size() < 2000)
+                    {
+                        activeInput->push_back(
+                            static_cast<char>(
+                                character));
+                    }
+                }
+            }
+
+            matrixStatus.clear();
+            matrixOutput.clear();
+        }
+    }
+
+    XClearWindow(display, window);
+    drawOperationScreen();
+    XFlush(display);
+}
+
+
+void CalculatorGUI::calculateMatrix(
+    int executionMethod)
+{
+    try
+    {
+        int rowsA;
+        int columnsA;
+        int rowsB;
+        int columnsB;
+        int threads;
+
+        std::istringstream dimensions(
+            matrixDimensionsInput);
+
+        std::string extraText;
+
+        if (!(dimensions >>
+              rowsA >>
+              columnsA >>
+              rowsB >>
+              columnsB) ||
+            (dimensions >> extraText))
+        {
+            throw std::invalid_argument(
+                "Enter four whole-number dimensions.");
+        }
+
+        std::istringstream threadInput(
+            matrixThreadsInput);
+
+        if (!(threadInput >> threads) ||
+            (threadInput >> extraText))
+        {
+            throw std::invalid_argument(
+                "Enter one whole-number thread count.");
+        }
+
+        auto parseValues =
+            [](const std::string& text)
+            {
+                std::vector<double> values;
+                std::istringstream input(text);
+                double value;
+
+                while (input >> value)
+                {
+                    values.push_back(value);
+                }
+
+                if (!input.eof())
+                {
+                    throw std::invalid_argument(
+                        "Matrix values must be numbers separated by spaces.");
+                }
+
+                return values;
+            };
+
+        std::vector<double> firstValues =
+            parseValues(matrixAInput);
+
+        std::vector<double> secondValues =
+            parseValues(matrixBInput);
+
+        calc.configureMatrixData(
+            currentScreen,
+            rowsA,
+            columnsA,
+            rowsB,
+            columnsB,
+            threads,
+            firstValues,
+            secondValues);
+
+        double seconds = 0.0;
+        std::string methodName;
+
+        if (executionMethod == 1)
+        {
+            methodName = "CPU";
+            calc.computeSerial(seconds);
+        }
+        else if (executionMethod == 2)
+        {
+            methodName = "Pthreads";
+            calc.computePthreads(
+                threads,
+                seconds);
+        }
+        else if (executionMethod == 3)
+        {
+            methodName = "OpenMP";
+            calc.computeOpenMP(
+                threads,
+                seconds);
+        }
+        else if (executionMethod == 4)
+        {
+            methodName = "CUDA";
+            calc.computeCUDA(seconds);
+        }
+        else
+        {
+            throw std::invalid_argument(
+                "Unknown execution method.");
+        }
+
+        matrixOutput =
+            calc.getMatrixResult();
+
+        matrixOutputRows =
+            calc.getMatrixResultRows();
+
+        matrixOutputColumns =
+            calc.getMatrixResultColumns();
+
+        std::ostringstream status;
+        status
+            << methodName
+            << " time: "
+            << std::fixed
+            << std::setprecision(9)
+            << seconds
+            << " seconds";
+
+        matrixStatus = status.str();
+    }
+    catch (const std::exception& error)
+    {
+        matrixOutput.clear();
+        matrixOutputRows = 0;
+        matrixOutputColumns = 0;
+
+        matrixStatus =
+            std::string("Error: ") +
+            error.what();
+    }
+
+    XClearWindow(display, window);
+    drawOperationScreen();
+    XFlush(display);
+}
+
 void CalculatorGUI::drawOperationScreen()
 {
     const char* screenTitles[] =
@@ -434,10 +859,14 @@ void CalculatorGUI::drawOperationScreen()
         title,
         static_cast<int>(std::strlen(title)));
 
-    ///
     if (currentScreen == 1)
     {
         drawArithmeticControls();
+    }
+    else if (currentScreen >= 2 &&
+            currentScreen <= 4)
+    {
+        drawMatrixControls();
     }
     else
     {
@@ -453,7 +882,6 @@ void CalculatorGUI::drawOperationScreen()
             message,
             static_cast<int>(std::strlen(message)));
     }
-    ///
     const int backButtonX = 30;
     const int backButtonY = 620;
     const int backButtonWidth = 180;
@@ -520,6 +948,112 @@ void CalculatorGUI::handleOperationClick(
         }
     }
     
+    if (currentScreen >= 2 &&
+        currentScreen <= 4)
+    {
+        if (mouseY >= 100 &&
+            mouseY <= 135)
+        {
+            if (mouseX >= 30 &&
+                mouseX <= 330)
+            {
+                activeMatrixField = 1;
+            }
+            else if (mouseX >= 360 &&
+                     mouseX <= 480)
+            {
+                activeMatrixField = 2;
+            }
+            else
+            {
+                return;
+            }
+
+            XClearWindow(display, window);
+            drawOperationScreen();
+            XFlush(display);
+            return;
+        }
+
+        if (mouseX >= 30 &&
+            mouseX <= 830 &&
+            mouseY >= 170 &&
+            mouseY <= 205)
+        {
+            activeMatrixField = 3;
+
+            XClearWindow(display, window);
+            drawOperationScreen();
+            XFlush(display);
+            return;
+        }
+
+        if (mouseX >= 30 &&
+            mouseX <= 830 &&
+            mouseY >= 240 &&
+            mouseY <= 275)
+        {
+            activeMatrixField = 4;
+
+            XClearWindow(display, window);
+            drawOperationScreen();
+            XFlush(display);
+            return;
+        }
+
+        if (mouseY >= 310 &&
+            mouseY <= 350)
+        {
+            if (mouseX >= 30 &&
+                mouseX <= 120)
+            {
+                calculateMatrix(1);
+                return;
+            }
+
+            if (mouseX >= 135 &&
+                mouseX <= 255)
+            {
+                calculateMatrix(2);
+                return;
+            }
+
+            if (mouseX >= 270 &&
+                mouseX <= 390)
+            {
+                calculateMatrix(3);
+                return;
+            }
+
+            if (mouseX >= 405 &&
+                mouseX <= 495)
+            {
+                calculateMatrix(4);
+                return;
+            }
+
+            if (mouseX >= 510 &&
+                mouseX <= 600)
+            {
+                matrixDimensionsInput.clear();
+                matrixThreadsInput.clear();
+                matrixAInput.clear();
+                matrixBInput.clear();
+
+                matrixStatus.clear();
+                matrixOutput.clear();
+                matrixOutputRows = 0;
+                matrixOutputColumns = 0;
+
+                activeMatrixField = 1;
+
+                XClearWindow(display, window);
+                drawOperationScreen();
+                XFlush(display);
+                return;
+            }
+        }
+    }
 
     const int backButtonX = 30;
     const int backButtonY = 620;
@@ -613,6 +1147,13 @@ void CalculatorGUI::run()
             {
                 handleArithmeticKey(event.xkey);
             }
+
+            else if (currentScreen >= 2 &&
+                    currentScreen <= 4)
+            {
+                handleMatrixKey(event.xkey);
+            }
+
         }
         else if (
             event.type == ClientMessage &&
