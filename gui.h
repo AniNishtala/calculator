@@ -59,6 +59,12 @@ private:
     void handleArithmeticKey(XKeyEvent& keyEvent);
     void calculateArithmetic();
 
+    void drawMatrixControls();
+    void handleMatrixKey(XKeyEvent& keyEvent);
+    void calculateMatrix(int executionMethod);
+
+    
+
     Display* display = nullptr;                // Connection to the X11 display server
     Window window = 0;                         // Identifier for the calculator window
     GC graphicsContext = nullptr;              // X11 drawing context
@@ -68,6 +74,25 @@ private:
     
     std::string arithmeticInput;
     std::string arithmeticResult;
+
+    int activeMatrixField = 0;                   // 1=dimensions, 2=threads, 3=A, 4=B
+
+    std::string matrixDimensionsInput =
+        "2 2 2 2";                               // rowsA colsA rowsB colsB
+
+    std::string matrixThreadsInput = "4";
+
+    std::string matrixAInput =
+        "1 2 3 4";
+
+    std::string matrixBInput =
+        "5 6 7 8";
+
+    std::string matrixStatus;
+
+    std::vector<double> matrixOutput;
+    int matrixOutputRows = 0;
+    int matrixOutputColumns = 0;
 
     bool running = false;                      // Controls the GUI event loop
     int windowWidth = 1000;                    // Initial window width
