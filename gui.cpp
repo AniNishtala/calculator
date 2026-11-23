@@ -1,8 +1,12 @@
 #include "gui.h"
 
 #include <X11/keysym.h>
+#include <X11/Xutil.h>
 
+#include <cctype>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 
 
@@ -198,6 +202,207 @@ void CalculatorGUI::handleMenuClick(
     }
 }
 
+void CalculatorGUI::drawArithmeticControls()
+{
+    const char* inputLabel =
+        "Enter an arithmetic expression:";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        100,
+        inputLabel,
+        static_cast<int>(std::strlen(inputLabel)));
+
+    const int inputX = 30;
+    const int inputY = 120;
+    const int inputWidth = 700;
+    const int inputHeight = 45;
+
+    XDrawRectangle(
+        display,
+        window,
+        graphicsContext,
+        inputX,
+        inputY,
+        inputWidth,
+        inputHeight);
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        inputX + 15,
+        inputY + 28,
+        arithmeticInput.c_str(),
+        static_cast<int>(arithmeticInput.size()));
+
+    const int calculateX = 30;
+    const int calculateY = 190;
+    const int calculateWidth = 150;
+    const int calculateHeight = 45;
+
+    XDrawRectangle(
+        display,
+        window,
+        graphicsContext,
+        calculateX,
+        calculateY,
+        calculateWidth,
+        calculateHeight);
+
+    const char* calculateLabel = "Calculate";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        calculateX + 40,
+        calculateY + 28,
+        calculateLabel,
+        static_cast<int>(std::strlen(calculateLabel)));
+
+    const int clearX = 200;
+    const int clearY = 190;
+    const int clearWidth = 120;
+    const int clearHeight = 45;
+
+    XDrawRectangle(
+        display,
+        window,
+        graphicsContext,
+        clearX,
+        clearY,
+        clearWidth,
+        clearHeight);
+
+    const char* clearLabel = "Clear";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        clearX + 40,
+        clearY + 28,
+        clearLabel,
+        static_cast<int>(std::strlen(clearLabel)));
+
+    if (!arithmeticResult.empty())
+    {
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            285,
+            arithmeticResult.c_str(),
+            static_cast<int>(arithmeticResult.size()));
+    }
+
+    const char* instruction =
+        "Type an expression and press Enter or click Calculate.";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        330,
+        instruction,
+        static_cast<int>(std::strlen(instruction)));
+}
+
+
+void CalculatorGUI::calculateArithmetic()
+{
+    if (arithmeticInput.empty())
+    {
+        arithmeticResult =
+            "Error: Enter an arithmetic expression.";
+    }
+    else
+    {
+        try
+        {
+            double answer = 0.0;
+
+            calc.calculateExpression(
+                arithmeticInput,
+                answer);
+
+            std::ostringstream output;
+            output << std::setprecision(12) << answer;
+
+            arithmeticResult =
+                "Result: " + output.str();
+        }
+        catch (const std::exception& error)
+        {
+            arithmeticResult =
+                std::string("Error: ") + error.what();
+        }
+    }
+
+    XClearWindow(display, window);
+    drawOperationScreen();
+    XFlush(display);
+}
+
+
+void CalculatorGUI::handleArithmeticKey(
+    XKeyEvent& keyEvent)
+{
+    char textBuffer[32];
+    KeySym keySymbol;
+
+    int characterCount =
+        XLookupString(
+            &keyEvent,
+            textBuffer,
+            sizeof(textBuffer),
+            &keySymbol,
+            nullptr);
+
+    if (keySymbol == XK_BackSpace)
+    {
+        if (!arithmeticInput.empty())
+        {
+            arithmeticInput.pop_back();
+            arithmeticResult.clear();
+        }
+    }
+    else if (keySymbol == XK_Return ||
+             keySymbol == XK_KP_Enter)
+    {
+        calculateArithmetic();
+        return;
+    }
+    else
+    {
+        for (int i = 0; i < characterCount; i++)
+        {
+            unsigned char character =
+                static_cast<unsigned char>(
+                    textBuffer[i]);
+
+            if (std::isprint(character) &&
+                arithmeticInput.size() < 100)
+            {
+                arithmeticInput.push_back(
+                    static_cast<char>(character));
+
+                arithmeticResult.clear();
+            }
+        }
+    }
+
+    XClearWindow(display, window);
+    drawOperationScreen();
+    XFlush(display);
+}
+
 void CalculatorGUI::drawOperationScreen()
 {
     const char* screenTitles[] =
@@ -229,18 +434,26 @@ void CalculatorGUI::drawOperationScreen()
         title,
         static_cast<int>(std::strlen(title)));
 
-    const char* message =
-        "Input controls will be added next.";
+    ///
+    if (currentScreen == 1)
+    {
+        drawArithmeticControls();
+    }
+    else
+    {
+        const char* message =
+            "Input controls will be added next.";
 
-    XDrawString(
-        display,
-        window,
-        graphicsContext,
-        30,
-        100,
-        message,
-        static_cast<int>(std::strlen(message)));
-
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            100,
+            message,
+            static_cast<int>(std::strlen(message)));
+    }
+    ///
     const int backButtonX = 30;
     const int backButtonY = 620;
     const int backButtonWidth = 180;
@@ -273,6 +486,41 @@ void CalculatorGUI::handleOperationClick(
     int mouseX,
     int mouseY)
 {
+
+    
+    if (currentScreen == 1)
+    {
+        bool insideCalculateButton =
+            mouseX >= 30 &&
+            mouseX <= 180 &&
+            mouseY >= 190 &&
+            mouseY <= 235;
+
+        bool insideClearButton =
+            mouseX >= 200 &&
+            mouseX <= 320 &&
+            mouseY >= 190 &&
+            mouseY <= 235;
+
+        if (insideCalculateButton)
+        {
+            calculateArithmetic();
+            return;
+        }
+
+        if (insideClearButton)
+        {
+            arithmeticInput.clear();
+            arithmeticResult.clear();
+
+            XClearWindow(display, window);
+            drawOperationScreen();
+            XFlush(display);
+            return;
+        }
+    }
+    
+
     const int backButtonX = 30;
     const int backButtonY = 620;
     const int backButtonWidth = 180;
@@ -360,6 +608,10 @@ void CalculatorGUI::run()
                     drawMenu();
                     XFlush(display);
                 }
+            }
+            else if (currentScreen == 1)
+            {
+                handleArithmeticKey(event.xkey);
             }
         }
         else if (
