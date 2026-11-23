@@ -63,7 +63,9 @@ private:
     void handleMatrixKey(XKeyEvent& keyEvent);
     void calculateMatrix(int executionMethod);
 
-    
+    void drawBatchControls();
+    void handleBatchKey(XKeyEvent& keyEvent);
+    void calculateBatch(int executionMethod);
 
     Display* display = nullptr;                // Connection to the X11 display server
     Window window = 0;                         // Identifier for the calculator window
@@ -93,6 +95,22 @@ private:
     std::vector<double> matrixOutput;
     int matrixOutputRows = 0;
     int matrixOutputColumns = 0;
+
+    
+    
+    int activeBatchField = 0;                    // 1=expressions, 2=threads
+
+    std::string batchInput =
+        "2+3; 10*4; 100/5; (8-2)^2";
+
+    std::string batchThreadsInput = "4";
+    std::string batchStatus;
+
+    std::vector<double> batchResults;
+    std::vector<std::string> batchExpressions;
+
+
+
 
     bool running = false;                      // Controls the GUI event loop
     int windowWidth = 1000;                    // Initial window width
