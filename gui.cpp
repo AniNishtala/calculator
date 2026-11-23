@@ -828,6 +828,343 @@ void CalculatorGUI::calculateMatrix(
     XFlush(display);
 }
 
+void CalculatorGUI::drawBatchControls()
+{
+    std::string expressionLabel;
+
+    if (activeBatchField == 1)
+    {
+        expressionLabel = "> ";
+    }
+
+    expressionLabel +=
+        "Expressions separated by semicolons";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        90,
+        expressionLabel.c_str(),
+        static_cast<int>(
+            expressionLabel.size()));
+
+    XDrawRectangle(
+        display,
+        window,
+        graphicsContext,
+        30,
+        100,
+        800,
+        45);
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        40,
+        128,
+        batchInput.c_str(),
+        static_cast<int>(batchInput.size()));
+
+    std::string threadLabel;
+
+    if (activeBatchField == 2)
+    {
+        threadLabel = "> ";
+    }
+
+    threadLabel += "Thread count";
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        30,
+        175,
+        threadLabel.c_str(),
+        static_cast<int>(
+            threadLabel.size()));
+
+    XDrawRectangle(
+        display,
+        window,
+        graphicsContext,
+        30,
+        185,
+        120,
+        40);
+
+    XDrawString(
+        display,
+        window,
+        graphicsContext,
+        40,
+        211,
+        batchThreadsInput.c_str(),
+        static_cast<int>(
+            batchThreadsInput.size()));
+
+    auto drawButton =
+        [&](int x,
+            int width,
+            const char* label)
+        {
+            const int buttonY = 250;
+            const int buttonHeight = 40;
+
+            XDrawRectangle(
+                display,
+                window,
+                graphicsContext,
+                x,
+                buttonY,
+                width,
+                buttonHeight);
+
+            XDrawString(
+                display,
+                window,
+                graphicsContext,
+                x + 15,
+                buttonY + 25,
+                label,
+                static_cast<int>(
+                    std::strlen(label)));
+        };
+
+    drawButton(30, 90, "CPU");
+    drawButton(135, 120, "Pthreads");
+    drawButton(270, 120, "OpenMP");
+    drawButton(405, 90, "Clear");
+
+    if (!batchStatus.empty())
+    {
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            330,
+            batchStatus.c_str(),
+            static_cast<int>(
+                batchStatus.size()));
+    }
+
+    int resultsToDisplay =
+        std::min(
+            static_cast<int>(
+                batchResults.size()),
+            8);
+
+    for (int i = 0;
+         i < resultsToDisplay;
+         i++)
+    {
+        std::ostringstream resultLine;
+
+        resultLine
+            << (i + 1)
+            << ". "
+            << batchExpressions[i]
+            << " = "
+            << std::setprecision(12)
+            << batchResults[i];
+
+        std::string resultText =
+            resultLine.str();
+
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            370 + i * 25,
+            resultText.c_str(),
+            static_cast<int>(
+                resultText.size()));
+    }
+
+    if (batchResults.size() > 8)
+    {
+        const char* additionalResults =
+            "... additional results not displayed";
+
+        XDrawString(
+            display,
+            window,
+            graphicsContext,
+            30,
+            370 + resultsToDisplay * 25,
+            additionalResults,
+            static_cast<int>(
+                std::strlen(additionalResults)));
+    }
+}
+
+
+void CalculatorGUI::handleBatchKey(
+    XKeyEvent& keyEvent)
+{
+    char textBuffer[32];
+    KeySym keySymbol;
+
+    int characterCount =
+        XLookupString(
+            &keyEvent,
+            textBuffer,
+            sizeof(textBuffer),
+            &keySymbol,
+            nullptr);
+
+    if (keySymbol == XK_Tab)
+    {
+        activeBatchField =
+            activeBatchField % 2 + 1;
+    }
+    else
+    {
+        std::string* activeInput = nullptr;
+
+        if (activeBatchField == 1)
+        {
+            activeInput = &batchInput;
+        }
+        else if (activeBatchField == 2)
+        {
+            activeInput = &batchThreadsInput;
+        }
+
+        if (activeInput != nullptr)
+        {
+            if (keySymbol == XK_BackSpace)
+            {
+                if (!activeInput->empty())
+                {
+                    activeInput->pop_back();
+                }
+            }
+            else
+            {
+                for (int i = 0;
+                     i < characterCount;
+                     i++)
+                {
+                    unsigned char character =
+                        static_cast<unsigned char>(
+                            textBuffer[i]);
+
+                    if (std::isprint(character) &&
+                        activeInput->size() < 2000)
+                    {
+                        activeInput->push_back(
+                            static_cast<char>(
+                                character));
+                    }
+                }
+            }
+
+            batchStatus.clear();
+            batchResults.clear();
+            batchExpressions.clear();
+        }
+    }
+
+    XClearWindow(display, window);
+    drawOperationScreen();
+    XFlush(display);
+}
+
+
+void CalculatorGUI::calculateBatch(
+    int executionMethod)
+{
+    try
+    {
+        int threads;
+        std::string extraText;
+
+        std::istringstream threadInput(
+            batchThreadsInput);
+
+        if (!(threadInput >> threads) ||
+            (threadInput >> extraText))
+        {
+            throw std::invalid_argument(
+                "Enter one whole-number thread count.");
+        }
+
+        calc.splitExpressions(
+            batchInput,
+            batchExpressions);
+
+        double seconds = 0.0;
+        std::string methodName;
+
+        if (executionMethod == 1)
+        {
+            methodName = "CPU";
+
+            calc.arithmeticSerial(
+                batchExpressions,
+                batchResults,
+                seconds);
+        }
+        else if (executionMethod == 2)
+        {
+            methodName = "Pthreads";
+
+            calc.arithmeticPthreads(
+                batchExpressions,
+                threads,
+                batchResults,
+                seconds);
+        }
+        else if (executionMethod == 3)
+        {
+            methodName = "OpenMP";
+
+            calc.arithmeticOpenMP(
+                batchExpressions,
+                threads,
+                batchResults,
+                seconds);
+        }
+        else
+        {
+            throw std::invalid_argument(
+                "Unknown batch execution method.");
+        }
+
+        std::ostringstream status;
+        status
+            << methodName
+            << " time: "
+            << std::fixed
+            << std::setprecision(9)
+            << seconds
+            << " seconds";
+
+        batchStatus = status.str();
+    }
+    catch (const std::exception& error)
+    {
+        batchResults.clear();
+        batchExpressions.clear();
+
+        batchStatus =
+            std::string("Error: ") +
+            error.what();
+    }
+
+    XClearWindow(display, window);
+    drawOperationScreen();
+    XFlush(display);
+}
+
+
+
 void CalculatorGUI::drawOperationScreen()
 {
     const char* screenTitles[] =
@@ -863,12 +1200,18 @@ void CalculatorGUI::drawOperationScreen()
     {
         drawArithmeticControls();
     }
+    
     else if (currentScreen >= 2 &&
-            currentScreen <= 4)
+         currentScreen <= 4)
     {
         drawMatrixControls();
     }
+    else if (currentScreen == 5)
+    {
+        drawBatchControls();
+    }
     else
+
     {
         const char* message =
             "Input controls will be added next.";
@@ -1055,6 +1398,80 @@ void CalculatorGUI::handleOperationClick(
         }
     }
 
+    ///
+    if (currentScreen == 5)
+    {
+        if (mouseX >= 30 &&
+            mouseX <= 830 &&
+            mouseY >= 100 &&
+            mouseY <= 145)
+        {
+            activeBatchField = 1;
+
+            XClearWindow(display, window);
+            drawOperationScreen();
+            XFlush(display);
+            return;
+        }
+
+        if (mouseX >= 30 &&
+            mouseX <= 150 &&
+            mouseY >= 185 &&
+            mouseY <= 225)
+        {
+            activeBatchField = 2;
+
+            XClearWindow(display, window);
+            drawOperationScreen();
+            XFlush(display);
+            return;
+        }
+
+        if (mouseY >= 250 &&
+            mouseY <= 290)
+        {
+            if (mouseX >= 30 &&
+                mouseX <= 120)
+            {
+                calculateBatch(1);
+                return;
+            }
+
+            if (mouseX >= 135 &&
+                mouseX <= 255)
+            {
+                calculateBatch(2);
+                return;
+            }
+
+            if (mouseX >= 270 &&
+                mouseX <= 390)
+            {
+                calculateBatch(3);
+                return;
+            }
+
+            if (mouseX >= 405 &&
+                mouseX <= 495)
+            {
+                batchInput.clear();
+                batchThreadsInput.clear();
+                batchStatus.clear();
+                batchResults.clear();
+                batchExpressions.clear();
+
+                activeBatchField = 1;
+
+                XClearWindow(display, window);
+                drawOperationScreen();
+                XFlush(display);
+                return;
+            }
+        }
+    }
+    ///
+    
+
     const int backButtonX = 30;
     const int backButtonY = 620;
     const int backButtonWidth = 180;
@@ -1147,11 +1564,14 @@ void CalculatorGUI::run()
             {
                 handleArithmeticKey(event.xkey);
             }
-
             else if (currentScreen >= 2 &&
                     currentScreen <= 4)
             {
                 handleMatrixKey(event.xkey);
+            }
+            else if (currentScreen == 5)
+            {
+                handleBatchKey(event.xkey);
             }
 
         }
